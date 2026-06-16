@@ -25,6 +25,9 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
+data/reports/*
+!data/reports/.gitkeep
+
 # OS / Editor
 .DS_Store
 Thumbs.db
