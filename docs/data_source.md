@@ -1,7 +1,11 @@
 # Data Sources
 
-| 원본 파일명 | 저장 파일명 | 데이터 설명 | 사용 목적 | 비고 |
-| --- | --- | --- | --- | --- |
-| 시대별_04_대한민국.zip | data/sources/korea_by_period_04.zip | 시대별 대한민국 관련 데이터 | 시대별 맥락 데이터 확인 및 전처리 | 초기 데이터 소스 |
-| 문화체육관광부 한국정책방송원_영상역사관 국가기록사진_20251031.csv | data/sources/korea_policy_broadcasting_historical_photos_20251031.csv | 영상역사관 국가기록사진 목록 데이터 | 사진 기록 기반 메타데이터 확인 및 전처리 | 초기 데이터 소스 |
-| 문화체육관광부 대한민국역사박물관_주제별 근현대사 아카이브_목록정보_20250902.zip | data/sources/modern_history_archive_list_20250902.zip | 주제별 근현대사 아카이브 목록정보 | 근현대사 아카이브 메타데이터 확인 및 전처리 | 초기 데이터 소스 |
+현재 파이프라인은 확보된 로컬 원본 3개만 처리한다. KMDB API는 신청/승인 이후 별도 작업으로 추가한다.
+
+| source_name | file | format | use |
+|---|---|---|---|
+| `korea_by_period` | `data/sources/korea_by_period_04.zip` | TTL/RDF text | 시대별 대한민국 맥락 데이터 |
+| `ehistory_historical_photos` | `data/sources/korea_policy_broadcasting_historical_photos_20251031.csv` | CSV, cp949 우선 | 국가기록사진 메타데이터 |
+| `modern_history_archive` | `data/sources/modern_history_archive_list_20250902.zip` | XML files | 근현대사 아카이브 메타데이터 |
+
+원본 파일은 `data/sources` 아래에서 읽기만 한다. 압축 파일은 `data/raw`나 `data/processed`에 풀지 않고 zip 내부에서 streaming 처리한다.
