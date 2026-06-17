@@ -73,6 +73,15 @@ Qdrant만 적재:
 PYTHONPATH=src python3 -m data_pipeline.ingest --source all --limit 10 --load-qdrant
 ```
 
+## Verify
+
+MySQL과 Qdrant 적재 결과가 `record_id`로 연결되는지 읽기 전용으로 확인한다.
+
+```bash
+PYTHONPATH=src python3 -m data_pipeline.verify_storage --sample-size 5
+PYTHONPATH=src python3 -m data_pipeline.verify_storage --sample-size 10 --report-path /tmp/memory-box-storage-verify-report.json
+```
+
 ## Test
 
 ```bash

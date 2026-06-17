@@ -62,3 +62,21 @@ data/reports/latest_ingestion_report.json
 ```
 
 보고서 JSON은 실행 결과물이므로 커밋하지 않는다. 필요한 경우 `--report-path /tmp/report.json`처럼 레포 밖으로 지정한다.
+
+## 5. Verify Storage
+
+`--limit 10`으로 MySQL과 Qdrant에 적재한 뒤 저장소 연결 상태를 확인한다.
+
+```bash
+PYTHONPATH=src python3 -m data_pipeline.verify_storage --sample-size 5
+```
+
+검증 보고서를 남겨야 하면 레포 밖 경로를 지정한다.
+
+```bash
+PYTHONPATH=src python3 -m data_pipeline.verify_storage \
+  --sample-size 10 \
+  --report-path /tmp/memory-box-storage-verify-report.json
+```
+
+`missing_record_ids`가 나오면 Qdrant payload의 `record_id`가 MySQL `historical_records.record_id`와 맞지 않는 상태이므로 MySQL/Qdrant 적재 결과가 어긋난 것이다.
