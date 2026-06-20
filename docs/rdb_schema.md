@@ -1,6 +1,41 @@
 # RDB Schema
 
-MySQL 테이블 기본 이름은 `historical_records`이다. `.env`의 `MYSQL_TABLE_RECORDS`로 바꿀 수 있다.
+MySQL RDS MVP 적재 테이블 기본 이름은 `integrated_content`이다. `scripts/ingest_to_mysql.py --table`로 바꿀 수 있다.
+
+```sql
+CREATE TABLE IF NOT EXISTS integrated_content (
+  content_id VARCHAR(64) PRIMARY KEY,
+  source VARCHAR(100) NOT NULL,
+  title VARCHAR(500),
+  content_text MEDIUMTEXT,
+  event_year INT NULL,
+  era VARCHAR(50),
+  category VARCHAR(100),
+  url TEXT,
+  metadata JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+| column | note |
+|---|---|
+| content_id | 중복 적재를 막는 deterministic primary key. 기본적으로 `NormalizedRecord.record_id`를 사용한다. |
+| source | 원본 소스 |
+| title | 제목 |
+| content_text | 검색/표시/embedding에 사용 가능한 정제 본문 |
+| event_year | 날짜/시대에서 추출한 연도 |
+| era | 시대 또는 기간 |
+| category | 분류 |
+| url | 원본 URL |
+| metadata | 정제 레코드 전체 JSON |
+| created_at, updated_at | 생성/수정 시각 |
+
+`content_id`는 Qdrant payload의 `record_id`/`document_id`와 연결할 수 있는 값이다.
+
+## Legacy Loader
+
+기존 `data_pipeline.ingest --load-mysql` 경로는 `historical_records` 테이블을 사용한다. `.env`의 `MYSQL_TABLE_RECORDS`로 바꿀 수 있다.
 
 | column | note |
 |---|---|
