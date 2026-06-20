@@ -154,10 +154,24 @@ Python에서 같은 `.env` 값으로 database 선택과 `SHOW TABLES` 권한을 
 python scripts/check_mysql_connection.py
 ```
 
-RDS MySQL 적재는 기존 ingest 명령의 `--load-mysql` 옵션을 사용한다.
+RDS MySQL 적재는 MVP용 `integrated_content` 테이블에 upsert한다.
 
 ```bash
-python scripts/ingest_to_qdrant.py --input ./data --source all --limit 10 --load-mysql
+python scripts/ingest_to_mysql.py --input ./data
+```
+
+처음 검증할 때는 작은 limit으로 시작한다.
+
+```bash
+python scripts/ingest_to_mysql.py --input ./data --source historical_photos --limit 10
+```
+
+적재 후 MySQL client에서 row count를 확인한다.
+
+```sql
+USE memorybox;
+SHOW TABLES;
+SELECT COUNT(*) FROM integrated_content;
 ```
 
 주의:
