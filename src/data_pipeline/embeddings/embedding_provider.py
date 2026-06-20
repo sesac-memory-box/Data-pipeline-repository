@@ -1,67 +1,42 @@
-import hashlib
-import json
-import math
 import os
-import urllib.request
 from typing import Protocol
 
 
+DEFAULT_FASTEMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
 class EmbeddingProvider(Protocol):
+    model_name: str
     dimension: int
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         ...
 
 
-class HashEmbeddingProvider:
-    def __init__(self, dimension: int = 384) -> None:
-        self.dimension = dimension
+class FastEmbedProvider:
+    def __init__(self, model_name: str | None = None) -> None:
+        try:
+            from fastembed import TextEmbedding
+        except ImportError as exc:
+            raise RuntimeError(
+                "fastembed is required for Qdrant ingestion. "
+                "Install dependencies with: pip install -r requirements.txt"
+            ) from exc
+
+        self.model_name = model_name or os.getenv("FASTEMBED_MODEL", DEFAULT_FASTEMBED_MODEL)
+        self._model = TextEmbedding(model_name=self.model_name)
+        self.dimension = self._detect_dimension()
+
+    def _detect_dimension(self) -> int:
+        embedding = next(iter(self._model.embed(["dimension probe"])))
+        return len(embedding)
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        return [self._embed(text) for text in texts]
-
-    def _embed(self, text: str) -> list[float]:
-        vector = [0.0] * self.dimension
-        tokens = text.split() or [text]
-        for token in tokens:
-            digest = hashlib.sha256(token.encode("utf-8")).digest()
-            index = int.from_bytes(digest[:4], "big") % self.dimension
-            sign = 1.0 if digest[4] % 2 == 0 else -1.0
-            vector[index] += sign
-
-        norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-        return [value / norm for value in vector]
-
-
-class HttpEmbeddingProvider:
-    def __init__(self, url: str, dimension: int = 384) -> None:
-        if not url:
-            raise ValueError("EMBEDDING_API_URL is required when EMBEDDING_PROVIDER=http")
-        self.url = url
-        self.dimension = dimension
-
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        body = json.dumps({"texts": texts}).encode("utf-8")
-        request = urllib.request.Request(
-            self.url,
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        embeddings = payload.get("embeddings")
-        if not isinstance(embeddings, list):
-            raise ValueError("Embedding API response must contain an embeddings list")
-        return embeddings
+        clean_texts = [text for text in texts if text and text.strip()]
+        if len(clean_texts) != len(texts):
+            raise ValueError("FastEmbed received an empty text. Filter empty chunks before embedding.")
+        return [embedding.tolist() for embedding in self._model.embed(clean_texts)]
 
 
 def create_embedding_provider() -> EmbeddingProvider:
-    provider = os.getenv("EMBEDDING_PROVIDER", "hash").lower()
-    dimension = int(os.getenv("EMBEDDING_DIM", os.getenv("QDRANT_VECTOR_SIZE", "384")))
-
-    if provider == "hash":
-        return HashEmbeddingProvider(dimension=dimension)
-    if provider == "http":
-        return HttpEmbeddingProvider(os.getenv("EMBEDDING_API_URL", ""), dimension=dimension)
-    raise ValueError(f"Unsupported EMBEDDING_PROVIDER: {provider}")
+    return FastEmbedProvider()

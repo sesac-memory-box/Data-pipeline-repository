@@ -12,25 +12,26 @@ from data_pipeline.extractors import (
     extract_modern_history_archive,
 )
 from data_pipeline.loaders import MySQLLoader, QdrantLoader
+from data_pipeline.loaders.qdrant_points import build_chunked_records
 from data_pipeline.reports.ingestion_report import SourceSummary, write_ingestion_report
 from data_pipeline.schemas.record import NormalizedRecord
 from data_pipeline.transformers.record_transformer import normalize_record
 
 
-SOURCE_CONFIG = {
+SOURCE_FILES = {
     "historical_photos": {
         "source_name": "ehistory_historical_photos",
-        "path": PROJECT_ROOT / "data" / "sources" / "korea_policy_broadcasting_historical_photos_20251031.csv",
+        "filename": "korea_policy_broadcasting_historical_photos_20251031.csv",
         "extractor": extract_historical_photos,
     },
     "modern_history_archive": {
         "source_name": "modern_history_archive",
-        "path": PROJECT_ROOT / "data" / "sources" / "modern_history_archive_list_20250902.zip",
+        "filename": "modern_history_archive_list_20250902.zip",
         "extractor": extract_modern_history_archive,
     },
     "korea_by_period": {
         "source_name": "korea_by_period",
-        "path": PROJECT_ROOT / "data" / "sources" / "korea_by_period_04.zip",
+        "filename": "korea_by_period_04.zip",
         "extractor": extract_korea_by_period,
     },
 }
@@ -47,10 +48,18 @@ def parse_args() -> argparse.Namespace:
         choices=["all", "historical_photos", "modern_history_archive", "korea_by_period"],
         default="all",
     )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "sources",
+        help="Directory containing source files. If ./data is provided, ./data/sources is used.",
+    )
     parser.add_argument("--limit", type=int, default=None, help="Maximum records per source.")
     parser.add_argument("--dry-run", action="store_true", help="Parse, normalize, and report only.")
     parser.add_argument("--load-mysql", action="store_true", help="Upsert records into MySQL.")
     parser.add_argument("--load-qdrant", action="store_true", help="Upsert vectors into Qdrant.")
+    parser.add_argument("--collection", default=None, help="Qdrant collection name.")
+    parser.add_argument("--reset-collection", action="store_true", help="Delete and recreate Qdrant collection.")
     parser.add_argument(
         "--report-path",
         type=Path,
@@ -61,19 +70,38 @@ def parse_args() -> argparse.Namespace:
 
 def selected_sources(source: str) -> list[str]:
     if source == "all":
-        return list(SOURCE_CONFIG)
+        return list(SOURCE_FILES)
     return [source]
+
+
+def resolve_input_dir(input_path: Path) -> Path:
+    if input_path.name == "data" and (input_path / "sources").exists():
+        return input_path / "sources"
+    return input_path
+
+
+def build_source_config(input_path: Path) -> dict[str, dict]:
+    source_dir = resolve_input_dir(input_path)
+    config: dict[str, dict] = {}
+    for key, value in SOURCE_FILES.items():
+        config[key] = {
+            "source_name": value["source_name"],
+            "path": source_dir / value["filename"],
+            "extractor": value["extractor"],
+        }
+    return config
 
 
 def process_source(
     key: str,
+    source_config: dict[str, dict],
     limit: int | None,
     batch_size: int,
     mysql_loader: MySQLLoader | None,
     qdrant_loader: QdrantLoader | None,
     embedding_provider,
 ) -> tuple[SourceSummary, list[NormalizedRecord]]:
-    config = SOURCE_CONFIG[key]
+    config = source_config[key]
     path = config["path"]
     summary = SourceSummary(
         source_name=config["source_name"],
@@ -123,8 +151,16 @@ def flush_batch(
     if mysql_loader is not None:
         summary.mysql_upserted_count += mysql_loader.upsert_records(records)
     if qdrant_loader is not None and embedding_provider is not None:
-        vectors = embedding_provider.embed_texts([record.embedding_text for record in records])
-        summary.qdrant_upserted_count += qdrant_loader.upsert_records(records, vectors)
+        chunked_records = build_chunked_records(
+            records,
+            qdrant_loader.chunk_size,
+            qdrant_loader.chunk_overlap,
+        )
+        skipped = len(records) - len({chunk.payload["document_id"] for chunk in chunked_records})
+        summary.skipped_count += max(skipped, 0)
+        if chunked_records:
+            vectors = embedding_provider.embed_texts([chunk.text for chunk in chunked_records])
+            summary.qdrant_upserted_count += qdrant_loader.upsert_chunked_records(chunked_records, vectors)
 
 
 def main() -> None:
@@ -133,22 +169,28 @@ def main() -> None:
     dry_run = args.dry_run or not (args.load_mysql or args.load_qdrant)
     run_id = str(uuid.uuid4())
     started_at = utc_now()
-    batch_size = int(os.getenv("INGESTION_BATCH_SIZE", "500"))
+    batch_size = int(os.getenv("BATCH_SIZE", os.getenv("INGESTION_BATCH_SIZE", "64")))
 
     summaries: list[SourceSummary] = []
     samples_by_source: dict[str, list[NormalizedRecord]] = {}
+    source_config = build_source_config(args.input)
 
     mysql_loader = None if dry_run or not args.load_mysql else MySQLLoader()
     embedding_provider = None if dry_run or not args.load_qdrant else create_embedding_provider()
     qdrant_loader = (
         None
         if dry_run or not args.load_qdrant
-        else QdrantLoader(vector_size=embedding_provider.dimension)
+        else QdrantLoader(
+            vector_size=embedding_provider.dimension,
+            collection_name=args.collection,
+            reset_collection=args.reset_collection,
+        )
     )
 
     for source_key in selected_sources(args.source):
         summary, samples = process_source(
             source_key,
+            source_config,
             args.limit,
             batch_size,
             mysql_loader,
@@ -175,6 +217,13 @@ def main() -> None:
     print(f"dry_run={dry_run}")
     print(f"valid_count={total_valid}")
     print(f"errors={total_errors}")
+    if embedding_provider is not None and qdrant_loader is not None:
+        total_qdrant = sum(summary.qdrant_upserted_count for summary in summaries)
+        total_skipped = sum(summary.skipped_count for summary in summaries)
+        print(f"qdrant_collection={qdrant_loader.collection_name}")
+        print(f"fastembed_model={embedding_provider.model_name}")
+        print(f"qdrant_upserted_chunks={total_qdrant}")
+        print(f"skipped_records={total_skipped}")
     print(f"report_path={args.report_path}")
 
 
