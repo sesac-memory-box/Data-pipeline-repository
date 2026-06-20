@@ -40,7 +40,7 @@ class StorageVerificationTest(unittest.TestCase):
         report = build_report(
             mysql_total_count=2,
             mysql_source_counts={"historical_photos": 2},
-            qdrant_collection_name="memory_box_records",
+            qdrant_collection_name="memory_box_contents",
             qdrant_exists=True,
             qdrant_points_count=2,
             qdrant_vectors_count=None,
@@ -51,7 +51,7 @@ class StorageVerificationTest(unittest.TestCase):
         )
 
         self.assertEqual(report["mysql"]["total_count"], 2)
-        self.assertEqual(report["qdrant"]["collection_name"], "memory_box_records")
+        self.assertEqual(report["qdrant"]["collection_name"], "memory_box_contents")
         self.assertEqual(report["join_check"]["join_key"], "record_id")
         self.assertEqual(report["join_check"]["qdrant_sample_count"], 2)
         self.assertEqual(report["join_check"]["matched_mysql_count"], 1)

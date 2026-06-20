@@ -1,6 +1,6 @@
 # Data Pipeline
 
-로컬 원본 데이터 3개를 읽어 공통 스키마로 정제하고, MySQL과 Qdrant에 적재하는 파이프라인이다. 백엔드는 Qdrant에서 의미 검색 후보를 찾고, `record_id`로 MySQL 상세 데이터를 조회한다.
+로컬 원본 데이터 3개를 읽어 공통 스키마로 정제하고, MySQL과 Qdrant에 적재하는 파이프라인이다. Qdrant에는 FastEmbed로 만든 실제 텍스트 embedding과 검색용 chunk payload를 저장한다.
 
 KMDB API는 아직 신청/승인 전이라 현재 범위에서는 제외한다.
 
@@ -18,17 +18,38 @@ KMDB API는 아직 신청/승인 전이라 현재 범위에서는 제외한다.
 data/sources
   -> extract / transform
   -> MySQL historical_records
-  -> Qdrant memory_box_records
+  -> chunk text
+  -> FastEmbed
+  -> Qdrant memory_box_contents
   -> backend lookup
 ```
 
-MySQL은 상세 조회, 필터링, 원본 필드 추적을 맡는다. Qdrant는 embedding vector와 최소 payload로 의미 검색 후보를 반환한다. 두 저장소는 같은 `record_id`로 연결한다.
+MySQL은 상세 조회, 필터링, 원본 필드 추적을 맡는다. Qdrant는 embedding vector와 `content` 본문을 포함한 chunk payload로 의미 검색 후보를 반환한다. 두 저장소는 같은 `record_id`/`document_id`로 연결한다.
 
 ## Local Storage
 
 ```bash
 cp .env.example .env
 docker compose up -d
+```
+
+Qdrant만 빠르게 띄울 수도 있다.
+
+```bash
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+의존성 설치:
+
+```bash
+pip install -r requirements.txt
+```
+
+MVP에서 ai-serving-server와 반드시 맞춰야 하는 값:
+
+```bash
+QDRANT_COLLECTION=memory_box_contents
+FASTEMBED_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ```
 
 상태 확인:
@@ -73,6 +94,26 @@ Qdrant만 적재:
 PYTHONPATH=src python3 -m data_pipeline.ingest --source all --limit 10 --load-qdrant
 ```
 
+스크립트 wrapper로도 실행할 수 있다.
+
+```bash
+python scripts/ingest_to_qdrant.py --input ./data --source all --collection memory_box_contents --load-qdrant
+```
+
+collection을 삭제 후 재생성하려면 reset 옵션을 명시한다.
+
+```bash
+python scripts/ingest_to_qdrant.py --input ./data --source all --collection memory_box_contents --load-qdrant --reset-collection
+```
+
+## Search
+
+적재 후 같은 FastEmbed 모델로 query embedding을 만들고 Qdrant에서 top-k를 확인한다.
+
+```bash
+python scripts/search_qdrant.py --query "1970년대 서울역" --top-k 5
+```
+
 ## Verify
 
 MySQL과 Qdrant 적재 결과가 `record_id`로 연결되는지 읽기 전용으로 확인한다.
@@ -85,7 +126,9 @@ PYTHONPATH=src python3 -m data_pipeline.verify_storage --sample-size 10 --report
 ## Test
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
+pip install -r requirements.txt
+pip install -e .
+pytest
 ```
 
 ## Notes

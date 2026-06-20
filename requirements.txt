@@ -1,5 +1,6 @@
-# requests
-# pandas
-# python-dotenv
+python-dotenv
 mysql-connector-python
 qdrant-client
+fastembed
+tqdm
+pytest

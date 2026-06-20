@@ -38,7 +38,11 @@ def load_config() -> StorageVerificationConfig:
         mysql_table_records=os.getenv("MYSQL_TABLE_RECORDS", DEFAULT_MYSQL_TABLE),
         qdrant_url=os.getenv("QDRANT_URL", "http://localhost:6333"),
         qdrant_api_key=os.getenv("QDRANT_API_KEY") or None,
-        qdrant_collection_name=os.getenv("QDRANT_COLLECTION_NAME", "memory_box_records"),
+        qdrant_collection_name=(
+            os.getenv("QDRANT_COLLECTION")
+            or os.getenv("QDRANT_COLLECTION_NAME")
+            or "memory_box_contents"
+        ),
     )
 
 
