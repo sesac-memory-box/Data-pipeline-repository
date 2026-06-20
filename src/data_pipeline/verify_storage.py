@@ -21,6 +21,7 @@ class StorageVerificationConfig:
     mysql_user: str
     mysql_password: str
     mysql_database: str
+    mysql_charset: str
     mysql_table_records: str
     qdrant_url: str
     qdrant_api_key: str | None
@@ -30,11 +31,12 @@ class StorageVerificationConfig:
 def load_config() -> StorageVerificationConfig:
     load_dotenv()
     return StorageVerificationConfig(
-        mysql_host=os.getenv("MYSQL_HOST", "localhost"),
-        mysql_port=int(os.getenv("MYSQL_PORT", "3306")),
-        mysql_user=os.getenv("MYSQL_USER", ""),
-        mysql_password=os.getenv("MYSQL_PASSWORD", ""),
-        mysql_database=os.getenv("MYSQL_DATABASE", "memory_box"),
+        mysql_host=os.getenv("DB_HOST") or os.getenv("MYSQL_HOST", "localhost"),
+        mysql_port=int(os.getenv("DB_PORT") or os.getenv("MYSQL_PORT", "3306")),
+        mysql_user=os.getenv("DB_USER") or os.getenv("MYSQL_USER", ""),
+        mysql_password=os.getenv("DB_PASSWORD") or os.getenv("MYSQL_PASSWORD", ""),
+        mysql_database=os.getenv("DB_NAME") or os.getenv("MYSQL_DATABASE", "memorybox"),
+        mysql_charset=os.getenv("DB_CHARSET", "utf8mb4"),
         mysql_table_records=os.getenv("MYSQL_TABLE_RECORDS", DEFAULT_MYSQL_TABLE),
         qdrant_url=os.getenv("QDRANT_URL", "http://localhost:6333"),
         qdrant_api_key=os.getenv("QDRANT_API_KEY") or None,
@@ -132,7 +134,7 @@ def connect_mysql(config: StorageVerificationConfig):
             user=config.mysql_user,
             password=config.mysql_password,
             database=config.mysql_database,
-            charset="utf8mb4",
+            charset=config.mysql_charset,
         )
     except Exception as exc:
         raise RuntimeError(

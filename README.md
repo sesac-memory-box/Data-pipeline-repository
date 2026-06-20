@@ -123,6 +123,49 @@ PYTHONPATH=src python3 -m data_pipeline.verify_storage --sample-size 5
 PYTHONPATH=src python3 -m data_pipeline.verify_storage --sample-size 10 --report-path /tmp/memory-box-storage-verify-report.json
 ```
 
+## MySQL RDS Check
+
+RDS 접속 정보는 로컬 `.env`에만 입력한다.
+
+```bash
+cp .env.example .env
+```
+
+`.env`에서 아래 값을 실제 RDS 접속 정보로 채운다.
+
+```bash
+DB_HOST=
+DB_PORT=3306
+DB_NAME=memorybox
+DB_USER=
+DB_PASSWORD=
+DB_CHARSET=utf8mb4
+```
+
+MySQL client로 먼저 3306 포트 접속을 확인할 수 있다.
+
+```bash
+mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p
+```
+
+Python에서 같은 `.env` 값으로 database 선택과 `SHOW TABLES` 권한을 확인한다.
+
+```bash
+python scripts/check_mysql_connection.py
+```
+
+RDS MySQL 적재는 기존 ingest 명령의 `--load-mysql` 옵션을 사용한다.
+
+```bash
+python scripts/ingest_to_qdrant.py --input ./data --source all --limit 10 --load-mysql
+```
+
+주의:
+
+- `.env`는 커밋하지 않는다.
+- `DB_PASSWORD`를 README, PR, 채팅에 노출하지 않는다.
+- RDS host는 브라우저가 아니라 MySQL client 또는 Python으로 3306 포트에 접속한다.
+
 ## Test
 
 ```bash

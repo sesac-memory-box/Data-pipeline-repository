@@ -29,11 +29,12 @@ RDB_FIELDS = [
 
 class MySQLLoader:
     def __init__(self) -> None:
-        self.host = os.getenv("MYSQL_HOST", "localhost")
-        self.port = int(os.getenv("MYSQL_PORT", "3306"))
-        self.user = os.getenv("MYSQL_USER", "")
-        self.password = os.getenv("MYSQL_PASSWORD", "")
-        self.database = os.getenv("MYSQL_DATABASE", "memory_box")
+        self.host = os.getenv("DB_HOST") or os.getenv("MYSQL_HOST", "localhost")
+        self.port = int(os.getenv("DB_PORT") or os.getenv("MYSQL_PORT", "3306"))
+        self.user = os.getenv("DB_USER") or os.getenv("MYSQL_USER", "")
+        self.password = os.getenv("DB_PASSWORD") or os.getenv("MYSQL_PASSWORD", "")
+        self.database = os.getenv("DB_NAME") or os.getenv("MYSQL_DATABASE", "memorybox")
+        self.charset = os.getenv("DB_CHARSET", "utf8mb4")
         self.table = os.getenv("MYSQL_TABLE_RECORDS", "historical_records")
 
     def _connect(self):
@@ -51,7 +52,7 @@ class MySQLLoader:
             user=self.user,
             password=self.password,
             database=self.database,
-            charset="utf8mb4",
+            charset=self.charset,
         )
 
     def ensure_table(self, connection) -> None:

@@ -14,6 +14,8 @@ venv/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Logs
 logs/*
@@ -28,6 +30,9 @@ data/processed/*
 
 data/reports/*
 !data/reports/.gitkeep
+
+# Local storage
+qdrant_storage/
 
 # OS / Editor
 .DS_Store
